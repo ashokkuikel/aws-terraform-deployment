@@ -117,10 +117,6 @@ resource "aws_db_instance" "wordpress" {
 }
 
 
-resource "aws_cloudwatch_log_group" "main" {
-  name = local.app_name
-}
-
 resource "aws_lb" "main" {
   name               = "wordpress-alb"
   internal           = false
