@@ -108,14 +108,15 @@ resource "aws_ecs_task_definition" "main" {
   container_definitions = jsonencode([
     {
       name  = local.app_name
-      image = "${aws_ecr_repository.wordpress.repository_url}:<TAG>"
-    portMappings = [
-    {
-      containerPort = 80
-      hostPort      = 80
-      protocol      = "tcp"
-    }
-  ]
+      image = "${aws_ecr_repository.wordpress.repository_url}:<TAG>",
+      
+      portMappings = [
+        {
+          containerPort = 80
+          hostPort      = 80
+          protocol      = "tcp"
+        }
+      ]
 
   environment = [
     {
