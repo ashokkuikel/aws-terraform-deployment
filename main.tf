@@ -2,8 +2,58 @@ provider "aws" {
   region = "us-west-2"
 }
 
+variable "db_username" {
+  description = "The database username"
+}
+
+variable "db_password" {
+  description = "The database password"
+  sensitive   = true
+}
+
+
 locals {
   app_name = "wordpress-ecs"
+}
+
+# Add the IAM roles and CloudWatch log group here
+
+resource "aws_iam_role" "ecs_execution_role" {
+  name = "ecs-execution-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role" "ecs_task_role" {
+  name = "ecs-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "main" {
+  name = local.app_name
 }
 
 resource "aws_vpc" "main" {
