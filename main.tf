@@ -118,26 +118,27 @@ resource "aws_db_instance" "wordpress" {
 
 resource "aws_s3_bucket" "wp_content" {
   bucket = "${local.app_name}-wp-content"
+  
+  lifecycle_rule {
+    id      = "versioning"
+    status  = "Enabled"
+    prefix  = ""
+    enabled = true
+  }
+
+  lifecycle {
+    ignore_changes = [
+      # Ignore changes to the RDS instance's tags
+      "tags",
+      # Ignore changes to the wp-content S3 bucket's versioning configuration
+      "lifecycle_rule",
+    ]
+
+    # Automatically delete all resources when they are removed from the Terraform configuration
+    prevent_destroy = false
+  }
 }
 
-
-# Configure lifecycle rules to automatically delete all resources except RDS instance and wp-content bucket
-lifecycle {
-  ignore_changes = [
-    # Ignore changes to the RDS instance's tags
-    tags,
-    # Ignore changes to the wp-content S3 bucket's versioning configuration
-    lifecycle_rule {
-      id      = "versioning"
-      status  = "Enabled"
-      prefix  = ""
-      enabled = true
-    }
-  ]
-
-  # Automatically delete all resources when they are removed from the Terraform configuration
-  prevent_destroy = false
-}
 
 # Create a resource to delete all resources except RDS and wp-content S3 bucket
 resource "null_resource" "delete_all_resources" {
