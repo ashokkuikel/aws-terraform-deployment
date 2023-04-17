@@ -108,7 +108,7 @@ resource "aws_ecs_task_definition" "main" {
   container_definitions = jsonencode([
     {
       name  = local.app_name
-      image = "${aws_ecr_repository.wordpress.repository_url}:<TAG>",
+      image = "${aws_ecr_repository.wordpress.repository_url}:<TAG>"
       
       portMappings = [
         {
@@ -118,32 +118,34 @@ resource "aws_ecs_task_definition" "main" {
         }
       ]
 
-  environment = [
-    {
-      name  = "WORDPRESS_DB_NAME"
-      value = "your_db_name"
-    },
-    {
-      name  = "WORDPRESS_DB_USER"
-      value = var.db_username
-    },
-    {
-      name  = "WORDPRESS_DB_PASSWORD"
-      value = var.db_password
-    },
-    {
-      name  = "WORDPRESS_DB_HOST"
-      value = aws_db_instance.wordpress.endpoint
-    }
-  ]
+      environment = [
+        {
+          name  = "WORDPRESS_DB_NAME"
+          value = "your_db_name"
+        },
+        {
+          name  = "WORDPRESS_DB_USER"
+          value = var.db_username
+        },
+        {
+          name  = "WORDPRESS_DB_PASSWORD"
+          value = var.db_password
+        },
+        {
+          name  = "WORDPRESS_DB_HOST"
+          value = aws_db_instance.wordpress.endpoint
+        }
+      ]
 
-  logConfiguration = {
-    logDriver = "awslogs"
+      logConfiguration = {
+        logDriver = "awslogs"
 
-    options = {
-      "awslogs-region"        = "us-west-2"
-      "awslogs-group"         = aws_cloudwatch_log_group.main.name
-      "awslogs-stream-prefix" = "ecs"
+        options = {
+          "awslogs-region"        = "us-west-2"
+          "awslogs-group"         = aws_cloudwatch_log_group.main.name
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
     }
-  }
+  ])
 }
