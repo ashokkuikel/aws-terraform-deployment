@@ -33,7 +33,14 @@ resource "aws_iam_role" "ecs_execution_role" {
       }
     ]
   })
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [name]
+    prevent_destroy       = true
+  }
 }
+
 
 resource "aws_iam_role" "ecs_task_role" {
   name = "ecs-task-role"
