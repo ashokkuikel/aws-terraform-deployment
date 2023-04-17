@@ -117,12 +117,22 @@ resource "aws_db_instance" "wordpress" {
 
 resource "aws_lb" "main" {
   name               = "wordpress-alb"
-  internal           = false
   load_balancer_type = "application"
-  subnets            = aws_subnet.private.*.id
 
-  security_groups = [aws_security_group.ecs_service.id]
+  subnets = [
+    aws_subnet.private[0].id,
+    aws_subnet.private[1].id,
+  ]
+
+  security_groups = [
+    aws_security_group.alb.id,
+  ]
+  
+  tags = {
+    Name = local.app_name
+  }
 }
+
 
 resource "aws_lb_target_group" "main" {
   name     = "wordpress-tg"
