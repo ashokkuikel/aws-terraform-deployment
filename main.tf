@@ -69,11 +69,13 @@ resource "aws_subnet" "private" {
 
   cidr_block = "10.0.${count.index + 1}.0/24"
   vpc_id     = aws_vpc.main.id
+  availability_zone = "us-west-2${count.index < 2 ? "a" : "b"}" # Change this line
 
   tags = {
     Name = "${local.app_name}-private-${count.index + 1}"
   }
 }
+
 
 resource "aws_security_group" "ecs_service" {
   name        = "ecs-service"
