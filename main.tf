@@ -121,10 +121,9 @@ resource "aws_s3_bucket" "wp_content" {
 
   # Configure lifecycle rules to automatically delete all resources except RDS instance and wp-content bucket
   lifecycle {
+    Copy code
     ignore_changes = [
-      # Ignore changes to the RDS instance's tags
       tags,
-      # Ignore changes to the wp-content S3 bucket's versioning configuration
       lifecycle_rule {
         id      = "versioning"
         status  = "Enabled"
