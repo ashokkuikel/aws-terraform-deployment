@@ -136,7 +136,64 @@ resource "aws_db_instance" "wordpress" {
 
   backup_retention_period = 7
   skip_final_snapshot = true
+
+ 
+# Configure lifecycle rules to automatically delete all resources except RDS instance and wp-content bucket
+lifecycle {
+  ignore_changes = [
+    # Ignore changes to the RDS instance's tags
+    tags,
+    # Ignore changes to the wp-content S3 bucket's versioning configuration
+    lifecycle_rule {
+      id      = "versioning"
+      status  = "Enabled"
+      prefix  = ""
+      enabled = true
+    }
+  ]
+
+  # Automatically delete all resources when they are removed from the Terraform configuration
+  prevent_destroy = false
 }
+
+# Create a resource to delete all resources except RDS and wp-content S3 bucket
+resource "null_resource" "delete_all_resources" {
+  provisioner "local-exec" {
+    command = <<EOT
+      aws s3 rm s3://${aws_s3_bucket.wp_content.bucket}/ --recursive --exclude "wp-content/**"
+      aws rds delete-db-instance --db-instance-identifier ${aws_db_instance.wordpress.identifier} --skip-final-snapshot
+      aws s3 rb s3://${aws_s3_bucket.wp_content.bucket} --force
+      aws cloudformation delete-stack --stack-name ${local.app_name}
+    EOT
+  }
+
+  # Use triggers to ensure that the null_resource is recreated whenever the list of resources to delete changes
+  triggers = {
+    resources = join(",", [
+      aws_iam_role.ecs_execution_role.arn,
+      aws_iam_role.ecs_task_role.arn,
+      aws_cloudwatch_log_group.main.arn,
+      aws_vpc.main.id,
+      aws_subnet.private.*.id,
+      aws_security_group.ecs_service.id,
+      aws_security_group.rds.id,
+      aws_lb.main.arn,
+      aws_lb_target_group.main.arn,
+      aws_db_subnet_group.main.id,
+      aws_ecr_repository.wordpress.repository_url,
+      aws_ecs_cluster.main.arn,
+      aws_ecs_task_definition.main.arn,
+      aws_ecs_service.main.id,
+    ])
+  }
+
+  # Make the null_resource depend on RDS and wp-content S3 bucket
+  depends_on = [
+    aws_db_instance.wordpress,
+    aws_s3_bucket.wp_content,
+  ]
+}
+
 
 
 resource "aws_lb" "main" {
