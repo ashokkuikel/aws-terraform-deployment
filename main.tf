@@ -33,9 +33,18 @@ resource "aws_iam_role" "ecs_execution_role" {
       }
     ]
   })
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [name]
+    prevent_destroy       = true
+  }
 }
 
+
 resource "aws_iam_role" "ecs_task_role" {
+  count = length(data.aws_iam_role.ecs_task_role) == 0 ? 1 : 0
+
   name = "ecs-task-role"
 
   assume_role_policy = jsonencode({
@@ -51,6 +60,11 @@ resource "aws_iam_role" "ecs_task_role" {
     ]
   })
 }
+
+data "aws_iam_role" "ecs_task_role" {
+  name = "ecs-task-role"
+}
+
 
 resource "aws_cloudwatch_log_group" "main" {
   name = local.app_name
