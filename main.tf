@@ -95,49 +95,32 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.ecs_service.id]
   }
 }
+
+
+resource "aws_db_instance" "wordpress" {
+  identifier             = "wordpress-db"
+  allocated_storage      = 20
+  engine                 = "mysql"
+  engine_version         = "8.0"
+  instance_class         = "db.t2.micro"
+  name                   = "wordpress-db"
+  username               = var.db_username
+  password               = var.db_password
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.rds.id]
+  skip_final_snapshot    = true
+
+  tags = {
+    Name = local.app_name
+  }
+}
+
+
 resource "aws_s3_bucket" "wp_content" {
   bucket = "${local.app_name}-wp-content"
 }
 
-# Configure lifecycle rules to automatically delete all resources except RDS instance and wp-content bucket
-lifecycle {
-  ignore_changes = [
-    # Ignore changes to the RDS instance's tags
-    tags,
-    # Ignore changes to the wp-content S3 bucket's versioning configuration
-    lifecycle_rule {
-      id      = "versioning"
-      status  = "Enabled"
-      prefix  = ""
-      enabled = true
-    }
-  ]
 
-  # Automatically delete all resources when they are removed from the Terraform configuration
-  prevent_destroy = false
-}
-resource "aws_db_instance" "wordpress" {
-  identifier = "wordpress-db"
-
-  engine            = "mysql"
-  engine_version    = "8.0"
-  instance_class    = "db.t3.micro"
-  allocated_storage = 20
-
-  username = var.db_username
-  password = var.db_password
-
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  publicly_accessible    = false
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  multi_az = false
-  storage_encrypted = true
-
-  backup_retention_period = 7
-  skip_final_snapshot = true
-
- 
 # Configure lifecycle rules to automatically delete all resources except RDS instance and wp-content bucket
 lifecycle {
   ignore_changes = [
@@ -193,8 +176,6 @@ resource "null_resource" "delete_all_resources" {
     aws_s3_bucket.wp_content,
   ]
 }
-
-
 
 resource "aws_lb" "main" {
   name               = "wordpress-alb"
@@ -275,7 +256,7 @@ resource "aws_ecs_task_definition" "main" {
   container_definitions = jsonencode([
     {
       name  = local.app_name
-      image = "${aws_ecr_repository.wordpress.repository_url}:<TAG>"
+      image = "${aws_ecr_repository.wordpress.repository_url}:latest"
       
       portMappings = [
         {
@@ -315,4 +296,91 @@ resource "aws_ecs_task_definition" "main" {
       }
     }
   ])
+}
+
+# Add the worker task definition here
+resource "aws_ecs_task_definition" "worker" {
+  family                   = "${local.app_name}-worker"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
+  cpu                      = "256"
+  memory                   = "512"
+  
+  container_definitions = jsonencode([
+    {
+      name  = "worker"
+      image = "${aws_ecr_repository.wordpress.repository_url}:<TAG>"
+      
+      environment = [
+        {
+          name  = "WORDPRESS_DB_NAME"
+          value = "your_db_name"
+        },
+        {
+          name  = "WORDPRESS_DB_USER"
+          value = var.db_username
+        },
+        {
+          name  = "WORDPRESS_DB_PASSWORD"
+          value = var.db_password
+        },
+        {
+          name  = "WORDPRESS_DB_HOST"
+          value = aws_db_instance.wordpress.endpoint
+        }
+      ]
+      
+      logConfiguration = {
+        logDriver = "awslogs"
+
+        options = {
+          "awslogs-region"        = "us-west-2"
+          "awslogs-group"         = aws_cloudwatch_log_group.main.name
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
+}
+
+# Create an ECS service for the worker task definition
+resource "aws_ecs_service" "worker" {
+  name            = "${local.app_name}-worker"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.worker.arn
+  launch_type     = "FARGATE"
+
+  desired_count = 1
+
+  network_configuration {
+    subnets          = aws_subnet.private.*.id
+    security_groups  = [aws_security_group.ecs_service.id]
+    assign_public_ip = false
+  }
+} 
+
+# Create a CloudWatch event rule to trigger the worker task on a schedule
+resource "aws_cloudwatch_event_rule" "worker" {
+  name        = "${local.app_name}-worker"
+  schedule_expression = "rate(1 hour)"
+}
+
+# Add a target to the CloudWatch event rule to run the worker task
+resource "aws_cloudwatch_event_target" "worker" {
+  rule      = aws_cloudwatch_event_rule.worker.name
+  arn       = aws_ecs_cluster.main.arn
+  role_arn  = aws_iam_role.ecs_execution_role.arn
+  
+  ecs_target {
+    task_count          = 1
+    task_definition_arn = aws_ecs_task_definition.worker.arn
+    
+    network_configuration {
+      subnets          = aws_subnet.private.*.id
+      security_groups  = [aws_security_group.ecs_service.id]
+      assign_public_ip = false
+    }
+  }
 }
